@@ -1,59 +1,61 @@
-/** @file class.c
- * Julien Lesgourgues, 17.04.2011
- */
+double phi_init;
+double S_init;
+double lambda;
+double V_lambda;
+double m_S;
+double beta;
+double alpha_s;
+double m0_s;
 
-#include "class.h"
 
-/* this main runs only the background part */
+enum background_quantities {
+  ...
+  phi_D_fld,
+  phi_D_prime_fld,
+  S_fld,
+  S_prime_fld,
+  ...
+};
 
-int main(int argc, char **argv) {
+y[phi_D_fld] = pba->phi_init;
+y[phi_D_prime_fld] = 0.0;
+y[S_fld] = pba->S_init;
+y[S_prime_fld] = 0.0;
 
-  struct precision pr;        /* for precision parameters */
-  struct background ba;       /* for cosmological background */
-  struct thermodynamics th;           /* for thermodynamics */
-  struct perturbations pt;         /* for source functions */
-  struct transfer tr;        /* for transfer functions */
-  struct primordial pm;       /* for primordial spectra */
-  struct harmonic hr;          /* for output spectra */
-  struct fourier fo;        /* for non-linear spectra */
-  struct lensing le;          /* for lensed spectra */
-  struct distortions sd;      /* for spectral distortions */
-  struct output op;           /* for output files */
-  ErrorMsg errmsg;            /* for error messages */
+// Virtualization/dark field potentials
+double V_phi = pba->V_lambda * exp(-pba->lambda * y[phi_D_fld]);
+double dV_dphi = -pba->lambda * V_phi;
 
-  if (input_init(argc, argv,&pr,&ba,&th,&pt,&tr,&pm,&hr,&fo,&le,&sd,&op,errmsg) == _FAILURE_) {
-    printf("\n\nError running input_init_from_arguments \n=>%s\n",errmsg);
-    return _FAILURE_;
-  }
+double V_S = 0.5 * pba->m_S * pba->m_S * y[S_fld] * y[S_fld];
+double dV_dS = pba->m_S * pba->m_S * y[S_fld];
 
-  if (background_init(&pr,&ba) == _FAILURE_) {
-    printf("\n\nError running background_init \n=>%s\n",ba.error_message);
-    return _FAILURE_;
-  }
+// Equations of motion
+dy[phi_D_fld] = y[phi_D_prime_fld];
+dy[phi_D_prime_fld] = -3.0 * aH * y[phi_D_prime_fld] - dV_dphi + pba->beta * y[S_fld];
 
-  /****** here you can output the evolution of any background
-	  quanitity you are interested in ******/
+dy[S_fld] = y[S_prime_fld];
+dy[S_prime_fld] = -3.0 * aH * y[S_prime_fld] - dV_dS + pba->beta * y[phi_D_fld];
 
-  int index_tau;
+double rho_phi = 0.5 * pow(y[phi_D_prime_fld], 2) + V_phi;
+double p_phi = 0.5 * pow(y[phi_D_prime_fld], 2) - V_phi;
 
-  for (index_tau=0; index_tau<ba.bt_size; index_tau++) {
+double rho_S = 0.5 * pow(y[S_prime_fld], 2) + V_S;
+double p_S = 0.5 * pow(y[S_prime_fld], 2) - V_S;
 
-    fprintf(stdout,
-	    "tau=%e z=%e a=%e H=%e\n",
-	    ba.tau_table[index_tau],
-	    ba.z_table[index_tau],
-	    ba.background_table[index_tau*ba.bg_size+ba.index_bg_a],
-	    ba.background_table[index_tau*ba.bg_size+ba.index_bg_H]);
+*pba->rho_tot += rho_phi + rho_S;
+*pba->p_tot += p_phi + p_S;
 
-  }
+double m_s = pba->m0_s + pba->alpha_s * y[S_fld];
 
-  /****** all calculations done, now free the structures ******/
+class_read_double("phi_init", pba->phi_init);
+class_read_double("S_init", pba->S_init);
+class_read_double("lambda", pba->lambda);
+class_read_double("V_lambda", pba->V_lambda);
+class_read_double("m_S", pba->m_S);
+class_read_double("beta", pba->beta);
+class_read_double("alpha_s", pba->alpha_s);
+class_read_double("m0_s", pba->m0_s);
 
-  if (background_free(&ba) == _FAILURE_) {
-    printf("\n\nError in background_free \n=>%s\n",ba.error_message);
-    return _FAILURE_;
-  }
+make clean && make
+./class explanatory/your_model.ini
 
-  return _SUCCESS_;
-
-}
